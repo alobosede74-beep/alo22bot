@@ -1,5 +1,5 @@
 """
-@alo22bot - Complete Working Version
+@alo22bot - Fixed Version with Proper Callback Handling
 A Telegram bot for word counting and plagiarism checking
 """
 
@@ -8,6 +8,7 @@ import sys
 import re
 import logging
 import requests
+import hashlib
 from collections import Counter
 from typing import Dict
 
@@ -19,7 +20,7 @@ print(f"Current directory: {os.getcwd()}")
 # Try to import telegram
 try:
     from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-    from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, CallbackQueryHandler, ContextTypes
+    from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackQueryHandler, ContextTypes
     print("✅ Telegram module imported successfully!")
 except ImportError as e:
     print(f"❌ Failed to import telegram: {e}")
@@ -274,9 +275,14 @@ async def wordcount_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     stats = count_words(text)
     response = format_word_count(stats)
     
+    # Store text in context for later use (instead of callback data)
+    # Use a hash of the text as the callback data
+    text_hash = hashlib.md5(text.encode()).hexdigest()[:10]
+    context.user_data['last_text'] = text
+    
     keyboard = [
         [
-            InlineKeyboardButton("🔍 Check Plagiarism", callback_data=f"plag_{text[:100]}"),
+            InlineKeyboardButton("🔍 Check Plagiarism", callback_data=f"plag_{text_hash}"),
             InlineKeyboardButton("📊 More Stats", callback_data="more_stats")
         ]
     ]
@@ -355,8 +361,8 @@ A powerful Telegram bot for text analysis and plagiarism checking.
 • 💬 Instant text analysis
 
 **Technical Stack:**
-• Python 3.11+
-• python-telegram-bot v20+
+• Python 3.12+
+• python-telegram-bot v21+
 • Railway.app hosting
 • GitHub version control
 
@@ -372,6 +378,10 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     
     stats = count_words(text)
     
+    # Store text in context for later use
+    text_hash = hashlib.md5(text.encode()).hexdigest()[:10]
+    context.user_data['last_text'] = text
+    
     response = f"""
 📊 **Quick Analysis**
 
@@ -384,8 +394,8 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     
     keyboard = [
         [
-            InlineKeyboardButton("📊 Detailed Stats", callback_data=f"stats_{text[:100]}"),
-            InlineKeyboardButton("🔍 Check Plagiarism", callback_data=f"plag_{text[:100]}")
+            InlineKeyboardButton("📊 Detailed Stats", callback_data=f"stats_{text_hash}"),
+            InlineKeyboardButton("🔍 Check Plagiarism", callback_data=f"plag_{text_hash}")
         ]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -399,10 +409,12 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     data = query.data
     
     try:
+        # Get the stored text from user_data
+        text = context.user_data.get('last_text', '')
+        
         if data.startswith("plag_"):
-            text = data.replace("plag_", "")
             if not text:
-                await query.edit_message_text("⚠️ No text found for plagiarism check.")
+                await query.edit_message_text("⚠️ No text found for plagiarism check. Please send your text again.")
                 return
             
             await query.edit_message_text("🔍 Checking plagiarism... Please wait ⏳")
@@ -411,9 +423,8 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             await query.edit_message_text(response, parse_mode='Markdown')
         
         elif data.startswith("stats_"):
-            text = data.replace("stats_", "")
             if not text:
-                await query.edit_message_text("⚠️ No text found for statistics.")
+                await query.edit_message_text("⚠️ No text found for statistics. Please send your text again.")
                 return
             
             stats = count_words(text)
@@ -456,7 +467,7 @@ def main():
     print("🤖 @alo22bot is starting...")
     
     try:
-        application = ApplicationBuilder().token(BOT_TOKEN).build()
+        application = Application.builder().token(BOT_TOKEN).build()
         
         application.add_handler(CommandHandler("start", start))
         application.add_handler(CommandHandler("help", help_command))
@@ -477,6 +488,8 @@ def main():
     except Exception as e:
         logger.error(f"Failed to start bot: {e}")
         print(f"❌ Failed to start bot: {e}")
+        import traceback
+        traceback.print_exc()
         sys.exit(1)
 
 if __name__ == "__main__":
