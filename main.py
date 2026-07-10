@@ -1,23 +1,31 @@
 """
-@alo22bot - Complete Single-File Version
+@alo22bot - Complete Working Version
 A Telegram bot for word counting and plagiarism checking
 """
 
 import os
+import sys
 import re
 import logging
 import requests
 from collections import Counter
 from typing import Dict
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, CallbackQueryHandler, ContextTypes
 
-# ==================== CONFIGURATION ====================
+# ==================== LOGGING SETUP ====================
 
-# Get token from environment variables
-BOT_TOKEN = os.environ.get("TELEGRAM_TOKEN")
-if not BOT_TOKEN:
-    raise ValueError("❌ TELEGRAM_TOKEN environment variable is required!")
+# Print debug info at startup
+print(f"Python version: {sys.version}")
+print(f"Current directory: {os.getcwd()}")
+print(f"Files in directory: {os.listdir('.')}")
+
+# Now import telegram
+try:
+    from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+    from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, CallbackQueryHandler, ContextTypes
+    print("✅ Telegram module imported successfully!")
+except ImportError as e:
+    print(f"❌ Failed to import telegram: {e}")
+    sys.exit(1)
 
 # Configure logging
 logging.basicConfig(
@@ -25,6 +33,17 @@ logging.basicConfig(
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
+
+# ==================== CONFIGURATION ====================
+
+# Get token from environment variables
+BOT_TOKEN = os.environ.get("TELEGRAM_TOKEN")
+if not BOT_TOKEN:
+    logger.error("❌ TELEGRAM_TOKEN environment variable is required!")
+    print("❌ TELEGRAM_TOKEN environment variable is required!")
+    sys.exit(1)
+
+logger.info(f"✅ TELEGRAM_TOKEN found: {BOT_TOKEN[:10]}...")
 
 # Constants
 MAX_TEXT_LENGTH = 5000
@@ -222,9 +241,6 @@ I can help you with:
 • Use `/plag Your text here` for plagiarism check
 • Use `/help` to see all commands
 
-**Example:**
-`/wc The quick brown fox jumps over the lazy dog`
-
 🚀 **Powered by Railway & GitHub**
     """
     await update.message.reply_text(welcome_text, parse_mode='Markdown')
@@ -385,12 +401,6 @@ A powerful Telegram bot for text analysis and plagiarism checking.
 • Railway.app hosting
 • GitHub version control
 
-**Why This Bot:**
-✅ Free to use
-✅ No registration required
-✅ Privacy-focused
-✅ Fast and reliable
-
 Made with ❤️ for the Telegram community
     """
     await update.message.reply_text(about_text, parse_mode='Markdown')
@@ -503,32 +513,40 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 def main():
     """Start the bot."""
     logger.info("🤖 @alo22bot is starting...")
+    print("🤖 @alo22bot is starting...")
     
-    # Create application
-    application = ApplicationBuilder().token(BOT_TOKEN).build()
-    
-    # Add command handlers
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("help", help_command))
-    application.add_handler(CommandHandler("wc", wordcount_command))
-    application.add_handler(CommandHandler("wordcount", wordcount_command))
-    application.add_handler(CommandHandler("plag", plagiarism_command))
-    application.add_handler(CommandHandler("plagiarism", plagiarism_command))
-    application.add_handler(CommandHandler("stats", stats_command))
-    application.add_handler(CommandHandler("about", about_command))
-    
-    # Add message handler for text messages
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
-    
-    # Add callback query handler for buttons
-    application.add_handler(CallbackQueryHandler(button_callback))
-    
-    # Add error handler
-    application.add_error_handler(error_handler)
-    
-    # Start the bot with long polling
-    logger.info("✅ Bot is running! Press Ctrl+C to stop.")
-    application.run_polling()
+    try:
+        # Create application
+        application = ApplicationBuilder().token(BOT_TOKEN).build()
+        
+        # Add command handlers
+        application.add_handler(CommandHandler("start", start))
+        application.add_handler(CommandHandler("help", help_command))
+        application.add_handler(CommandHandler("wc", wordcount_command))
+        application.add_handler(CommandHandler("wordcount", wordcount_command))
+        application.add_handler(CommandHandler("plag", plagiarism_command))
+        application.add_handler(CommandHandler("plagiarism", plagiarism_command))
+        application.add_handler(CommandHandler("stats", stats_command))
+        application.add_handler(CommandHandler("about", about_command))
+        
+        # Add message handler for text messages
+        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
+        
+        # Add callback query handler for buttons
+        application.add_handler(CallbackQueryHandler(button_callback))
+        
+        # Add error handler
+        application.add_error_handler(error_handler)
+        
+        # Start the bot with long polling
+        logger.info("✅ Bot is running! Press Ctrl+C to stop.")
+        print("✅ Bot is running! Press Ctrl+C to stop.")
+        application.run_polling()
+        
+    except Exception as e:
+        logger.error(f"Failed to start bot: {e}")
+        print(f"❌ Failed to start bot: {e}")
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
