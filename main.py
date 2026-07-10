@@ -11,14 +11,12 @@ import requests
 from collections import Counter
 from typing import Dict
 
-# ==================== LOGGING SETUP ====================
-
 # Print debug info at startup
+print(f"🚀 Starting @alo22bot...")
 print(f"Python version: {sys.version}")
 print(f"Current directory: {os.getcwd()}")
-print(f"Files in directory: {os.listdir('.')}")
 
-# Now import telegram
+# Try to import telegram
 try:
     from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
     from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, CallbackQueryHandler, ContextTypes
@@ -36,14 +34,14 @@ logger = logging.getLogger(__name__)
 
 # ==================== CONFIGURATION ====================
 
-# Get token from environment variables
 BOT_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 if not BOT_TOKEN:
     logger.error("❌ TELEGRAM_TOKEN environment variable is required!")
     print("❌ TELEGRAM_TOKEN environment variable is required!")
     sys.exit(1)
 
-logger.info(f"✅ TELEGRAM_TOKEN found: {BOT_TOKEN[:10]}...")
+logger.info(f"✅ TELEGRAM_TOKEN found")
+print(f"✅ TELEGRAM_TOKEN found")
 
 # Constants
 MAX_TEXT_LENGTH = 5000
@@ -65,16 +63,11 @@ def count_words(text: str) -> Dict:
             "reading_time_min": 0
         }
     
-    # Clean and split text
     words = re.findall(r'\b\w+\b', text)
     sentences = [s for s in re.split(r'[.!?]+', text) if s.strip()]
     paragraphs = [p for p in text.split('\n\n') if p.strip()]
-    
-    # Count characters
     chars_no_space = len(re.sub(r'\s', '', text))
     chars_with_space = len(text)
-    
-    # Word frequency
     word_freq = Counter(words)
     top_words = word_freq.most_common(5)
     
@@ -92,13 +85,9 @@ def count_words(text: str) -> Dict:
 def check_plagiarism_duplichecker(text: str) -> Dict:
     """Check plagiarism using DupliChecker API (free tier)"""
     try:
-        # Truncate to API limit
         api_text = text[:500]
         api_url = "https://www.duplichecker.com/API/check.php"
-        payload = {
-            'text': api_text,
-            'format': 'json'
-        }
+        payload = {'text': api_text, 'format': 'json'}
         
         response = requests.post(api_url, data=payload, timeout=10)
         
@@ -129,16 +118,11 @@ def check_plagiarism_basic(text: str) -> Dict:
             "source": "Basic Analysis"
         }
     
-    # Count word frequencies
     word_freq = Counter(words)
     total_words = len(words)
     unique_words = len(word_freq)
-    
-    # Calculate repetition ratio
     repeated_words = sum(1 for w, c in word_freq.items() if c > 2)
     repetition_ratio = (repeated_words / unique_words * 100) if unique_words > 0 else 0
-    
-    # Simple plagiarism indicator based on repetition
     plagiarism_score = min(repetition_ratio * 0.5, 50)
     
     return {
@@ -151,14 +135,10 @@ def check_plagiarism_basic(text: str) -> Dict:
 
 def check_plagiarism(text: str) -> Dict:
     """Main plagiarism check function with fallbacks"""
-    # Try DupliChecker first
     result = check_plagiarism_duplichecker(text)
-    
-    # If DupliChecker fails, use basic analysis
     if not result:
         logger.info("Using basic analysis as fallback")
         result = check_plagiarism_basic(text)
-    
     return result
 
 def format_word_count(stats: Dict) -> str:
@@ -208,7 +188,6 @@ def format_plagiarism_result(result: Dict) -> str:
 please use paid plagiarism checkers.
 """
     
-    # Add recommendations based on score
     if percentage > 50:
         response += "\n🚨 **High similarity detected!** Consider significant revision and proper citation."
     elif percentage > 25:
@@ -223,7 +202,6 @@ please use paid plagiarism checkers.
 # ==================== COMMAND HANDLERS ====================
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Send a welcome message when /start is issued."""
     user = update.effective_user
     welcome_text = f"""
 👋 Hello **{user.first_name}**!
@@ -246,7 +224,6 @@ I can help you with:
     await update.message.reply_text(welcome_text, parse_mode='Markdown')
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Send a help message."""
     help_text = """
 📖 **Available Commands:**
 
@@ -275,8 +252,6 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     await update.message.reply_text(help_text, parse_mode='Markdown')
 
 async def wordcount_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle /wordcount command."""
-    # Get text from command arguments or reply
     if context.args:
         text = ' '.join(context.args)
     elif update.message.reply_to_message:
@@ -292,18 +267,13 @@ async def wordcount_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         )
         return
     
-    # Check text length
     if len(text) > MAX_TEXT_LENGTH:
         text = text[:MAX_TEXT_LENGTH]
         await update.message.reply_text("⚠️ Text truncated to 5000 characters for analysis.")
     
-    # Calculate statistics
     stats = count_words(text)
-    
-    # Format response
     response = format_word_count(stats)
     
-    # Add inline keyboard for actions
     keyboard = [
         [
             InlineKeyboardButton("🔍 Check Plagiarism", callback_data=f"plag_{text[:100]}"),
@@ -315,8 +285,6 @@ async def wordcount_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     await update.message.reply_text(response, parse_mode='Markdown', reply_markup=reply_markup)
 
 async def plagiarism_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle /plagiarism command."""
-    # Get text from command arguments or reply
     if context.args:
         text = ' '.join(context.args)
     elif update.message.reply_to_message:
@@ -332,25 +300,18 @@ async def plagiarism_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         )
         return
     
-    # Limit text length for API
     if len(text) > PLAGIARISM_MAX_WORDS * 6:
         await update.message.reply_text(
             f"⚠️ Text is too long. Please limit to {PLAGIARISM_MAX_WORDS} words."
         )
         return
     
-    # Send processing message
     processing_msg = await update.message.reply_text("🔍 Analyzing text for plagiarism... Please wait ⏳")
     
     try:
-        # Check plagiarism
         result = check_plagiarism(text)
-        
-        # Format response
         response = format_plagiarism_result(result)
-        
         await processing_msg.edit_text(response, parse_mode='Markdown')
-        
     except Exception as e:
         logger.error(f"Error in plagiarism check: {e}")
         await processing_msg.edit_text(
@@ -358,7 +319,6 @@ async def plagiarism_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         )
 
 async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Show bot statistics."""
     stats_text = """
 📊 **Bot Statistics:**
 
@@ -382,7 +342,6 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     await update.message.reply_text(stats_text)
 
 async def about_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Show about information."""
     about_text = """
 🤖 **About @alo22bot**
 
@@ -406,17 +365,13 @@ Made with ❤️ for the Telegram community
     await update.message.reply_text(about_text, parse_mode='Markdown')
 
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle regular text messages (auto word count)."""
     text = update.message.text
     
-    # Ignore commands
     if not text or text.startswith('/'):
         return
     
-    # Analyze text
     stats = count_words(text)
     
-    # Quick response
     response = f"""
 📊 **Quick Analysis**
 
@@ -438,7 +393,6 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     await update.message.reply_text(response, reply_markup=reply_markup)
 
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle inline button callbacks."""
     query = update.callback_query
     await query.answer()
     
@@ -446,23 +400,17 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     
     try:
         if data.startswith("plag_"):
-            # Extract text from callback data
             text = data.replace("plag_", "")
             if not text:
                 await query.edit_message_text("⚠️ No text found for plagiarism check.")
                 return
             
-            # Send processing message
             await query.edit_message_text("🔍 Checking plagiarism... Please wait ⏳")
-            
-            # Check plagiarism
             result = check_plagiarism(text)
             response = format_plagiarism_result(result)
-            
             await query.edit_message_text(response, parse_mode='Markdown')
         
         elif data.startswith("stats_"):
-            # Extract text and show detailed stats
             text = data.replace("stats_", "")
             if not text:
                 await query.edit_message_text("⚠️ No text found for statistics.")
@@ -470,11 +418,8 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             
             stats = count_words(text)
             response = format_word_count(stats)
-            
-            # Add back button
             keyboard = [[InlineKeyboardButton("🔙 Back", callback_data="back")]]
             reply_markup = InlineKeyboardMarkup(keyboard)
-            
             await query.edit_message_text(response, parse_mode='Markdown', reply_markup=reply_markup)
         
         elif data == "more_stats":
@@ -493,15 +438,10 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     
     except Exception as e:
         logger.error(f"Error in callback handler: {e}")
-        await query.edit_message_text(
-            "❌ An error occurred. Please try again."
-        )
+        await query.edit_message_text("❌ An error occurred. Please try again.")
 
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Log errors and notify user."""
     logger.error(f"Update {update} caused error: {context.error}")
-    
-    # Send message to user
     if update and update.effective_message:
         await update.effective_message.reply_text(
             "❌ Sorry, an error occurred while processing your request.\n"
@@ -516,10 +456,8 @@ def main():
     print("🤖 @alo22bot is starting...")
     
     try:
-        # Create application
         application = ApplicationBuilder().token(BOT_TOKEN).build()
         
-        # Add command handlers
         application.add_handler(CommandHandler("start", start))
         application.add_handler(CommandHandler("help", help_command))
         application.add_handler(CommandHandler("wc", wordcount_command))
@@ -528,17 +466,10 @@ def main():
         application.add_handler(CommandHandler("plagiarism", plagiarism_command))
         application.add_handler(CommandHandler("stats", stats_command))
         application.add_handler(CommandHandler("about", about_command))
-        
-        # Add message handler for text messages
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
-        
-        # Add callback query handler for buttons
         application.add_handler(CallbackQueryHandler(button_callback))
-        
-        # Add error handler
         application.add_error_handler(error_handler)
         
-        # Start the bot with long polling
         logger.info("✅ Bot is running! Press Ctrl+C to stop.")
         print("✅ Bot is running! Press Ctrl+C to stop.")
         application.run_polling()
